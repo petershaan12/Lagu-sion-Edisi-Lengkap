@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   },
   description: "Butuh lirik, tampilan PPT, chord, atau audio? Cobain kami di Lagu Sion Edisi Lengkap.",
   applicationName: "Lagu Sion Edisi Lengkap",
-  keywords: ["Lagu Sion Edisi Lengkap", "Lagu Sion", "lirik Lagu Sion", "chord Lagu Sion", "lagu gereja Advent", "Gereja Masehi Advent Hari Ketujuh"],
+  keywords: ["LSED", "LSEL", "Lagu Sion Edisi Lengkap", "Lagu Sion", "lirik Lagu Sion", "chord Lagu Sion", "lagu gereja Advent", "Gereja Masehi Advent Hari Ketujuh"],
   authors: [{ name: "Peter Shaan", url: "https://petershaan.net" }],
   creator: "Peter Shaan",
   category: "music",

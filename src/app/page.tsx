@@ -34,6 +34,7 @@ export default async function Home({ searchParams }: HomeProps) {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Lagu Sion Edisi Lengkap",
+    alternateName: ["LSED", "LSEL", "Lagu Sion"],
     url: siteUrl,
     inLanguage: "id-ID",
     potentialAction: {
