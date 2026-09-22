@@ -10,7 +10,7 @@ import { SaveButton, usePlaylists } from "@/components/save-button";
 import { PresentationSlide } from "@/components/presentation-slide";
 import { connectFirebase, firebaseConfigured } from "@/lib/firebase";
 import { lyricsToDisplaySlides } from "@/lib/song-text";
-import { moveSlide, placeAudienceWindow, type PresentationState } from "@/lib/presentation";
+import { moveSlide, placeAudienceWindow, type PresentationState, type ScreenDetails } from "@/lib/presentation";
 import type { CollectionInfo, Song } from "@/types";
 
 const BUTTON = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-brand disabled:opacity-40";
@@ -37,6 +37,8 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
   const channel = useRef<BroadcastChannel | null>(null);
   const cloud = useRef<DatabaseReference | null>(null);
   const selection = useRef<AbortController | null>(null);
+  const screenDetails = useRef<ScreenDetails | null>(null);
+  const screenPermissionAttempted = useRef(false);
   const playlistSongs = useMemo(() => lists.find((list) => list.id === listId)?.songs ?? [], [lists, listId]);
   const playlistPosition = playlistSongs.findIndex((item) => item.slug === prepared.slug);
   const slides = useMemo(() => lyricsToDisplaySlides(state.mode === "chord" ? liveSong.chords : liveSong.lyrics), [liveSong, state.mode]);
@@ -85,7 +87,8 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
   }, [room]);
 
   useEffect(() => {
-    if (!room || !firebaseConfigured) return;
+    if (!room) return;
+    if (!firebaseConfigured) return;
     let disposed = false;
     let roomRef: DatabaseReference | undefined;
     let unsubscribe = () => {};
@@ -102,8 +105,17 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
         await onDisconnect(ref(db, `presentations/${room}/state/active`)).set(false);
         await set(cloud.current, latest.current);
         if (!disposed) setCloudReady(true);
-      } catch {
-        if (!disposed) setError("Remote online belum terhubung. Periksa konfigurasi Firebase. Layar kedua lokal tetap bisa dipakai.");
+      } catch (cause) {
+        if (disposed) return;
+        const code = typeof cause === "object" && cause && "code" in cause ? String(cause.code) : "";
+        const detail = code === "auth/operation-not-allowed"
+          ? "Aktifkan Anonymous sign-in di Firebase Authentication."
+          : code === "auth/unauthorized-domain"
+            ? "Tambahkan domain production ke Authorized domains Firebase Authentication."
+            : code.toLowerCase().includes("permission_denied") || code.toLowerCase().includes("permission-denied")
+              ? "Periksa rules Realtime Database untuk sesi presentasi."
+              : cause instanceof Error ? cause.message : "Periksa koneksi dan konfigurasi Firebase.";
+        setError(`Remote Firebase gagal${code ? ` (${code})` : ""}: ${detail} Layar lokal tetap bisa dipakai.`);
       }
     })();
     return () => { disposed = true; unsubscribe(); cloud.current = null; if (roomRef) void remove(roomRef).catch(() => {}); };
@@ -171,13 +183,24 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
   }
 
   async function openScreen() {
+    if (!firebaseConfigured) setError("Konfigurasi NEXT_PUBLIC_FIREBASE_* tidak masuk ke production build. Atur variabel sebelum build, lalu rebuild dan deploy ulang.");
+    const browser = window as Window & { getScreenDetails?: () => Promise<ScreenDetails> };
+    if (browser.getScreenDetails && !screenPermissionAttempted.current) {
+      screenPermissionAttempted.current = true;
+      try {
+        screenDetails.current = await browser.getScreenDetails();
+        setMessage("Izin layar diberikan. Klik Mulai presentasi sekali lagi untuk membuka layar tayangan.");
+      } catch {
+        setMessage("Izin layar tidak diberikan atau tidak tersedia. Klik Mulai presentasi lagi untuk membuka tayangan dan pindahkan jendelanya secara manual.");
+      }
+      return;
+    }
     const id = room || crypto.randomUUID();
-    // Open synchronously inside the click, before requesting screen permission.
     const target = window.open(`/present/screen#${new URLSearchParams({ room: id, ...(firebaseConfigured ? { cloud: "1" } : {}) })}`, `lagusion-${id}`, "popup,width=1280,height=720");
     if (!target) { setError("Popup diblokir. Izinkan popup untuk membuka layar tayangan."); return; }
     if (!room) setRoom(id);
     change({ active: true });
-    setMessage(await placeAudienceWindow(target));
+    setMessage(placeAudienceWindow(target, screenDetails.current || undefined));
   }
 
   async function copyLink() {
