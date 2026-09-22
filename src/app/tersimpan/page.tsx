@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ChevronUp, Heart, Plus, Presentation, Trash2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Heart, Plus, Trash2, X } from "lucide-react";
 import { SiteFooter } from "@/components/site-footer";
 import { usePlaylists } from "@/components/save-button";
+import { SlideMenu } from "@/components/slide-menu";
 import { LIKED_ID, addPlaylist, isRemovable, moveSong, removePlaylist, removeSong, save } from "@/lib/playlists";
 import { songNumber } from "@/lib/song-text";
 import { CONTAINER } from "@/lib/ui";
@@ -56,12 +57,7 @@ export default function SavedPage() {
               </h2>
               <span className="flex flex-none items-center gap-4">
                 {list.songs.length > 0 && (
-                  <Link
-                    href={`/display/${list.songs[0].slug}?list=${list.id}`}
-                    className="inline-flex items-center gap-1.5 text-[13px] font-bold text-muted hover:text-brand"
-                  >
-                    <Presentation size={16} /> Display playlist
-                  </Link>
+                  <SlideMenu slug={list.songs[0].slug} hasChords context={`list=${encodeURIComponent(list.id)}`} />
                 )}
                 {isRemovable(list.id) && (
                   <button
@@ -107,14 +103,7 @@ export default function SavedPage() {
                     <Link href={`/lagu/${song.slug}`} className="min-w-0 flex-1 truncate font-semibold text-ink hover:text-brand">
                       {song.title}
                     </Link>
-                    <Link
-                      href={`/display/${song.slug}?list=${list.id}`}
-                      aria-label={`Tampilkan ${song.title} sebagai slide`}
-                      className="inline-flex h-9 flex-none items-center gap-2 rounded-md border border-line px-3 text-[13px] font-bold text-ink hover:border-brand hover:text-brand"
-                    >
-                      <Presentation size={16} />
-                      <span className="max-mobile:hidden">Display</span>
-                    </Link>
+                    <SlideMenu slug={song.slug} hasChords context={`list=${encodeURIComponent(list.id)}`} compact />
                     <button
                       type="button"
                       onClick={() => save(removeSong(lists, list.id, song.slug))}

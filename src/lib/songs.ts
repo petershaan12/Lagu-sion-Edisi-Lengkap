@@ -187,7 +187,12 @@ export async function getAllSongs(): Promise<Song[]> {
   return (await collection()).find().sort({ number: 1 }).toArray().then((items) => items.map(toSong));
 }
 
-export async function getAdjacentSlugs(song: Song): Promise<{ previous: string | null; next: string | null }> {
+export async function getAdjacentSlugs(song: Song, query = ""): Promise<{ previous: string | null; next: string | null }> {
+  if (query.trim()) {
+    const { songs } = await getSongs(query, 1, 0, song.collection);
+    const at = songs.findIndex((item) => item.slug === song.slug);
+    return { previous: songs[at - 1]?.slug ?? null, next: at >= 0 ? songs[at + 1]?.slug ?? null : null };
+  }
   const byNumber = song.collection === DEFAULT_COLLECTION;
 
   if (!isMongoConfigured()) {

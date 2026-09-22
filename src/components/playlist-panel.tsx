@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ChevronDown, ChevronUp, Heart, ListMusic, Presentation } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronUp, Heart, ListMusic } from "lucide-react";
 import { usePlaylists } from "@/components/save-button";
+import { SlideMenu } from "@/components/slide-menu";
 import { LIKED_ID, moveSong, save } from "@/lib/playlists";
 import { songNumber } from "@/lib/song-text";
 
@@ -37,14 +38,9 @@ export function PlaylistPanel() {
                   {list.songs.length}
                 </span>
                 {list.songs.length > 0 && (
-                  <Link
-                    href={`/display/${list.songs[0].slug}?list=${list.id}`}
-                    aria-label={`Tampilkan playlist ${list.name} sebagai slide`}
-                    title="Display playlist"
-                    className="grid size-7 flex-none place-items-center rounded text-dim hover:text-brand"
-                  >
-                    <Presentation size={15} />
-                  </Link>
+                  <div className="flex-none">
+                    <SlideMenu slug={list.songs[0].slug} hasChords context={`list=${encodeURIComponent(list.id)}`} compact />
+                  </div>
                 )}
               </h3>
 
@@ -83,13 +79,9 @@ export function PlaylistPanel() {
                             <ChevronDown size={14} />
                           </button>
                         </span>
-                        <Link
-                          href={`/display/${song.slug}?list=${list.id}`}
-                          aria-label={`Tampilkan ${song.title} sebagai slide`}
-                          className="grid size-7 place-items-center rounded text-dim hover:text-brand"
-                        >
-                          <Presentation size={15} />
-                        </Link>
+                        <div className="w-28">
+                          <SlideMenu slug={song.slug} hasChords context={`list=${encodeURIComponent(list.id)}`} compact />
+                        </div>
                       </span>
                     </li>
                   ))}

@@ -99,6 +99,9 @@ export type DisplayPlayerProps = {
   prevSlug?: string | null;
   nextSlug?: string | null;
   startAtEnd?: boolean;
+  searchQuery?: string;
+  mode?: string;
+  fromNomor?: boolean;
 };
 
 export type HomeProps = {
@@ -113,7 +116,7 @@ export type HomeProps = {
 
 export type SongPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ view?: string; dari?: string }>;
+  searchParams: Promise<{ view?: string; dari?: string; q?: string }>;
 };
 
 export type NumberJumpProps = {

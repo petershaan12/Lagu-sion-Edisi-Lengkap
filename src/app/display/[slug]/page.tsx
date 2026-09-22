@@ -12,20 +12,24 @@ export default async function DisplayPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ mode?: string; list?: string; arah?: string }>;
+  searchParams: Promise<{ mode?: string; list?: string; arah?: string; q?: string; dari?: string }>;
 }) {
   const [route, query] = await Promise.all([params, searchParams]);
   const song = await getSongBySlug(route.slug);
   if (!song) notFound();
   const showChords = query.mode === "chord" && Boolean(song.chords);
-  const adjacent = await getAdjacentSlugs(song);
+  const searchQuery = typeof query.q === "string" ? query.q.trim() : "";
+  const adjacent = await getAdjacentSlugs(song, searchQuery);
 
   return (
     <DisplayPlayer
       key={song.slug}
       title={`${song.title}${showChords ? " - Chord" : ""}`}
       number={song.number}
-      slug={`${song.slug}${showChords ? "?view=chord" : ""}`}
+      slug={song.slug}
+      searchQuery={searchQuery}
+      mode={query.mode === "chord" ? "chord" : undefined}
+      fromNomor={query.dari === "nomor"}
       slides={lyricsToDisplaySlides(showChords ? song.chords : song.lyrics)}
       listId={query.list}
       prevSlug={adjacent.previous}

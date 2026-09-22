@@ -17,14 +17,16 @@ function tone(rank: number | undefined) {
   return "border-brand/15 text-brand/40 hover:bg-brand hover:text-white";
 }
 
-export function SongNumberGrid({ songs }: { songs: GridSong[] }) {
+export function SongNumberGrid({ songs, query = "" }: { songs: GridSong[]; query?: string }) {
+  const params = new URLSearchParams({ dari: "nomor" });
+  if (query) params.set("q", query);
   const visited = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const ranks = useMemo(() => recencyRank(visited), [visited]);
 
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
       {songs.map((song) => (
-        <Link href={`/lagu/${song.slug}?dari=nomor`} key={song.id} title={song.title} className={`${BASE} ${tone(ranks[song.slug])}`}>
+        <Link href={`/lagu/${song.slug}?${params}`} key={song.id} title={song.title} className={`${BASE} ${tone(ranks[song.slug])}`}>
           {songNumber(song.number)}
         </Link>
       ))}

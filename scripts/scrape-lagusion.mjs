@@ -1,6 +1,7 @@
 // Scrape Lagu Sion 1-525 from lagusiononline.blogspot.com into MongoDB.
 // Usage: node --env-file=.env.local scripts/scrape-lagusion.mjs [--dry] [--from 1] [--to 525]
 import { MongoClient } from "mongodb";
+import { normalizeReffMarkers } from "../src/lib/song-text.ts";
 
 const INDEX = "https://lagusiononline.blogspot.com/p/lagu-sion.html";
 const args = process.argv.slice(2);
@@ -127,7 +128,7 @@ function parseSong(html, number) {
   }
   if (current.length) verses.push(current);
 
-  const lyrics = verses.map((verse) => verse.join("\n")).filter(Boolean).join("\n\n");
+  const lyrics = normalizeReffMarkers(verses.map((verse) => verse.join("\n")).filter(Boolean).join("\n\n"));
   if (!lyrics) return null;
 
   const youtube = html.match(/(?:youtube\.com\/embed\/|youtu\.be\/|watch\?v=)([\w-]{11})/);

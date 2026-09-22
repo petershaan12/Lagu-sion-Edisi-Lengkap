@@ -26,6 +26,17 @@ export function lyricsToSlides(lyrics: string): string[] {
 const isReffBlock = (block: string) => /^reff\b\s*[:.]?\s*$/i.test(block.split("\n")[0].trim());
 const reffText = (block: string) => block.split("\n").slice(1).join("\n").trim();
 
+export function normalizeReffMarkers(lyrics: string): string {
+  return lyrics.split(/(\n\s*\n+)/).map((block) => {
+    const end = block.indexOf("\n");
+    const heading = (end < 0 ? block : block.slice(0, end)).trim();
+    const marker = heading.match(/^reff?\s*[:.]?\s*(?:ayat\s+)?(\d+(?:\s*[-–]\s*\d+)?)?\s*[:.]?$/i);
+    if (!marker) return block;
+    const note = marker[1] ? `\n(ayat ${marker[1]})` : "";
+    return `Reff:${note}${end < 0 ? "" : block.slice(end)}`;
+  }).join("");
+}
+
 export function lyricsToDisplaySlides(lyrics: string): DisplaySlide[] {
   const blocks = lyricsToSlides(lyrics);
   const slides: DisplaySlide[] = [];

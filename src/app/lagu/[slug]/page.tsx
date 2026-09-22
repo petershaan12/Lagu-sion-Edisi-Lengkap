@@ -1,22 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowUpRight, BookOpenText, Music2, Presentation } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, Music2 } from "lucide-react";
 import { SaveButton } from "@/components/save-button";
 import { SiteFooter } from "@/components/site-footer";
-import { NumberJump } from "@/components/number-jump";
+import { SongSearch } from "@/components/song-search";
 import { VisitTracker } from "@/components/visit-tracker";
 import { YoutubeEmbed } from "@/components/youtube-embed";
 import { getCollections } from "@/lib/collections";
 import { collectionOf } from "@/lib/song";
-import { bumpViews, getPopularSongs, getSongBySlug } from "@/lib/songs";
+import { bumpViews, getAdjacentSlugs, getPopularSongs, getSongBySlug } from "@/lib/songs";
 import { excerpt, lyricsToVerses, songNumber } from "@/lib/song-text";
 import { CONTAINER, SWITCH, TAB } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { JsonLd } from "@/components/json-ld";
+import { SlideMenu } from "@/components/slide-menu";
 import type { SongPageProps } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+const NAV_BUTTON = "inline-flex size-11 flex-none items-center justify-center rounded-md text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-30";
+const SONG_NAV_BUTTON = "inline-flex h-10 flex-1 items-center justify-center bg-surface text-ink transition-colors hover:bg-brand/10 hover:text-brand focus-visible:z-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:pointer-events-none disabled:opacity-30";
 
 export async function generateMetadata({ params }: SongPageProps): Promise<Metadata> {
   const song = await getSongBySlug((await params).slug);
@@ -47,12 +51,24 @@ export default async function SongPage({ params, searchParams }: SongPageProps) 
   if (!song) notFound();
   const showChords = query.view === "chord" && Boolean(song.chords);
   const fromNomor = query.dari === "nomor";
-  const backHref = fromNomor ? "/?view=nomor#katalog" : "/#katalog";
-  const dariSuffix = fromNomor ? "&dari=nomor" : "";
+  const searchQuery = typeof query.q === "string" ? query.q.trim() : "";
+  const context = new URLSearchParams();
+  if (searchQuery) context.set("q", searchQuery);
+  if (fromNomor) context.set("dari", "nomor");
+  const songHref = (slug: string, chord = false, display = false) => {
+    const params = new URLSearchParams(context);
+    if (chord) params.set(display ? "mode" : "view", "chord");
+    return `/${display ? "display" : "lagu"}/${slug}${params.size ? `?${params}` : ""}`;
+  };
+  const backParams = new URLSearchParams({ katalog: song.collection });
+  if (searchQuery) backParams.set("q", searchQuery);
+  if (fromNomor) backParams.set("view", "nomor");
+  const backHref = `/?${backParams}#katalog`;
   const verses = lyricsToVerses(showChords ? song.chords : song.lyrics);
-  const [album, popular] = await Promise.all([
+  const [album, popular, adjacent] = await Promise.all([
     getCollections().then((list) => collectionOf(list, song.collection)),
     getPopularSongs(song.slug),
+    getAdjacentSlugs(song, searchQuery),
     bumpViews(song.slug),
   ]);
   const schema = {
@@ -75,10 +91,10 @@ export default async function SongPage({ params, searchParams }: SongPageProps) 
       <VisitTracker slug={song.slug} />
       <main className={`${CONTAINER} pb-24 pt-11 max-mobile:pt-7.5`}>
         <div className="mb-11 flex items-center justify-between gap-4 max-mobile:mb-7.5">
-          <Link href={backHref} className="inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink">
-            <ArrowLeft size={18} /> Kembali ke katalog
+          <Link href={backHref} className={NAV_BUTTON} title="Kembali ke katalog" aria-label="Kembali ke katalog">
+            <ArrowLeft size={20} aria-hidden="true" />
           </Link>
-          <NumberJump />
+          <SongSearch defaultValue={searchQuery} songCollection={song.collection} className="flex h-9 w-56 items-center gap-2 rounded-md border border-line bg-surface px-3 text-left text-sm text-muted hover:border-brand max-mobile:h-11 max-mobile:w-full max-mobile:rounded-xl max-mobile:px-4" />
         </div>
 
         <header className="flex items-start justify-between gap-6 border-b border-line pb-11 max-mobile:flex-col max-mobile:pb-8">
@@ -98,28 +114,35 @@ export default async function SongPage({ params, searchParams }: SongPageProps) 
               {song.language && <span>{song.language}</span>}
             </div>
           </div>
-          <div className="flex flex-none flex-wrap items-center gap-2 max-mobile:w-full">
+          <div className="flex flex-none flex-col items-end gap-2 max-mobile:w-full max-mobile:items-stretch">
             <SaveButton song={{ slug: song.slug, number: song.number, title: song.title }} />
-            <Link
-              href={`/display/${song.slug}${showChords ? "?mode=chord" : ""}`}
-              className="inline-flex h-10 flex-none items-center justify-center gap-2 rounded-md bg-brand px-4 font-heading text-sm font-extrabold text-white transition-colors hover:bg-brand-dark max-mobile:w-full"
-            >
-              <Presentation size={17} /> Tampilkan slide
-            </Link>
+            <div className="flex w-56 flex-col gap-2 max-mobile:w-full">
+              <SlideMenu slug={song.slug} hasChords={Boolean(song.chords)} context={context.toString()} />
+              <nav className="flex overflow-hidden rounded-md border border-line" aria-label={searchQuery ? "Navigasi hasil pencarian" : "Navigasi lagu"}>
+                {adjacent.previous ? (
+                  <Link href={songHref(adjacent.previous, query.view === "chord")} className={SONG_NAV_BUTTON} title="Lagu sebelumnya" aria-label="Lagu sebelumnya">
+                    <ChevronLeft size={22} aria-hidden="true" />
+                  </Link>
+                ) : <button type="button" className={SONG_NAV_BUTTON} disabled title="Lagu sebelumnya" aria-label="Lagu sebelumnya"><ChevronLeft size={22} aria-hidden="true" /></button>}
+                <span className="w-px shrink-0 self-stretch bg-current opacity-20" aria-hidden="true" />
+                {adjacent.next ? (
+                  <Link href={songHref(adjacent.next, query.view === "chord")} className={SONG_NAV_BUTTON} title="Lagu berikutnya" aria-label="Lagu berikutnya">
+                    <ChevronRight size={22} aria-hidden="true" />
+                  </Link>
+                ) : <button type="button" className={SONG_NAV_BUTTON} disabled title="Lagu berikutnya" aria-label="Lagu berikutnya"><ChevronRight size={22} aria-hidden="true" /></button>}
+              </nav>
+            </div>
           </div>
         </header>
 
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,390px)] gap-22 pt-13 max-tablet:grid-cols-1 max-tablet:gap-13 max-mobile:pt-9">
-          <article>
+          <article aria-label={showChords ? "Chord" : "Lirik"}>
             <div className="mb-7 flex items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2.5">
-                <BookOpenText size={20} className="text-brand" />
-                <h2 className="m-0 font-heading text-3xl font-extrabold leading-tight">{showChords ? "Chord" : "Lirik"}</h2>
-              </div>
+              <h2 className="m-0 font-heading text-3xl font-extrabold leading-tight">{showChords ? "Chord" : "Lirik"}</h2>
               {song.chords && (
                 <nav className={SWITCH} aria-label="Versi lagu">
-                  <Link href={`/lagu/${song.slug}${fromNomor ? "?dari=nomor" : ""}`} data-active={!showChords} className={cn(TAB, "h-7.75 min-w-16")}>Lirik</Link>
-                  <Link href={`/lagu/${song.slug}?view=chord${dariSuffix}`} data-active={showChords} className={cn(TAB, "h-7.75 min-w-16")}>Chord</Link>
+                  <Link href={songHref(song.slug)} data-active={!showChords} className={cn(TAB, "h-7.75 min-w-16")}>Lirik</Link>
+                  <Link href={songHref(song.slug, true)} data-active={showChords} className={cn(TAB, "h-7.75 min-w-16")}>Chord</Link>
                 </nav>
               )}
             </div>

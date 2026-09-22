@@ -201,7 +201,7 @@ export function SongForm({ song, collections }: { song?: Song; collections: Coll
                   <span className="absolute left-3 top-6.5 text-[13px] font-semibold">
                     {slide.reff ? "Reff" : `${slide.bait}/${baitCount}`}
                   </span>
-                  <p className="absolute bottom-4 left-3 right-[20%] top-11.5 m-0 overflow-hidden whitespace-pre-line font-heading text-[11px] font-semibold leading-[1.45]">
+                  <p className={`absolute bottom-4 left-3 right-[20%] top-11.5 m-0 overflow-hidden text-[11px] font-semibold leading-[1.45] ${previewMode === "chords" ? "whitespace-pre-wrap font-mono" : "whitespace-pre-line font-heading"}`}>
                     {slide.text}
                   </p>
                   <span className="absolute bottom-0 left-0 h-0.75 bg-brand" style={{ width: `${((index + 1) / slides.length) * 100}%` }} />

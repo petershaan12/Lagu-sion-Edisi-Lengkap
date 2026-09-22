@@ -86,10 +86,10 @@ export async function Catalog(params: CatalogParams) {
   return (
     <>
       {numberView ? (
-        <SongNumberGrid songs={songs.map(({ id, slug, number, title }) => ({ id, slug, number, title }))} />
+        <SongNumberGrid songs={songs.map(({ id, slug, number, title }) => ({ id, slug, number, title }))} query={query} />
       ) : (
         <div className="border-t border-line">
-          {songs.map((song) => <SongRow song={song} key={song.id} />)}
+          {songs.map((song) => <SongRow song={song} key={song.id} query={query} />)}
         </div>
       )}
 

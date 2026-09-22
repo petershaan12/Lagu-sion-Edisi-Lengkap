@@ -27,7 +27,7 @@ const CONTROL_BUTTON =
   "grid size-10.5 place-items-center rounded-md border border-white/15 bg-white/10 text-inherit disabled:opacity-30 max-mobile:size-9.5";
 const CONTROL_BUTTON_LIGHT = "border-[#d9dfeb] bg-white text-[#264158]";
 
-export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, nextSlug, startAtEnd }: DisplayPlayerProps) {
+export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, nextSlug, startAtEnd, searchQuery, mode, fromNomor }: DisplayPlayerProps) {
   const [index, setIndex] = useState(startAtEnd ? slides.length - 1 : 0);
   const { resolvedTheme, setTheme } = useTheme();
   const light = resolvedTheme !== "dark";
@@ -49,11 +49,14 @@ export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, n
     (target: string, back = false) => {
       const query = new URLSearchParams();
       if (listId) query.set("list", listId);
+      if (searchQuery) query.set("q", searchQuery);
+      if (mode) query.set("mode", mode);
+      if (fromNomor) query.set("dari", "nomor");
       if (back) query.set("arah", "mundur");
       const params = query.toString();
       return `/display/${target}${params ? `?${params}` : ""}`;
     },
-    [listId],
+    [listId, searchQuery, mode, fromNomor],
   );
 
   const previous = useCallback(() => {
@@ -101,6 +104,10 @@ export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, n
   }
 
   const button = `${CONTROL_BUTTON} ${light ? CONTROL_BUTTON_LIGHT : ""}`;
+  const closeParams = new URLSearchParams();
+  if (searchQuery) closeParams.set("q", searchQuery);
+  if (mode === "chord") closeParams.set("view", "chord");
+  if (fromNomor) closeParams.set("dari", "nomor");
 
   return (
     <main
@@ -138,7 +145,7 @@ export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, n
         aria-live="polite"
       >
         <p
-          className={`m-0 max-w-300 origin-top-left whitespace-pre-line wrap-break-word font-heading font-semibold leading-[1.48] transition-transform max-mobile:leading-[1.35] ${fontSize}`}
+          className={`m-0 max-w-300 origin-top-left ${mode === "chord" ? "whitespace-pre-wrap font-mono" : "whitespace-pre-line font-heading"} wrap-break-word font-semibold leading-[1.48] transition-transform max-mobile:leading-[1.35] ${fontSize}`}
           style={{ transform: `scale(${scale})` }}
         >
           {slides[index]?.text}
@@ -213,7 +220,7 @@ export function DisplayPlayer({ title, number, slug, slides, listId, prevSlug, n
           {fullscreen ? <Shrink size={20} /> : <Expand size={20} />}
         </button>
         <span className={`mx-0.5 h-6 w-px max-mobile:hidden ${light ? "bg-black/15" : "bg-white/15"}`} />
-        <Link href={`/lagu/${slug}`} className={button} title="Tutup display" aria-label="Tutup display">
+        <Link href={`/lagu/${slug}${closeParams.size ? `?${closeParams}` : ""}`} className={button} title="Tutup display" aria-label="Tutup display">
           <X size={22} />
         </Link>
       </div>

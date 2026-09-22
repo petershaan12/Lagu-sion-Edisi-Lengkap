@@ -1,13 +1,16 @@
 import Link from "next/link";
-import { ArrowUpRight, Presentation } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { SlideMenu } from "@/components/slide-menu";
 import type { Song } from "@/types";
 import { excerpt, songNumber } from "@/lib/song-text";
 
-export function SongRow({ song }: { song: Song }) {
+export function SongRow({ song, query = "" }: { song: Song; query?: string }) {
+  const context = query ? new URLSearchParams({ q: query }).toString() : "";
+  const suffix = context ? `?${context}` : "";
   return (
     <article className="relative min-h-28 border-b border-line transition-colors hover:bg-surface max-mobile:min-h-33">
       <Link
-        href={`/lagu/${song.slug}`}
+        href={`/lagu/${song.slug}${suffix}`}
         className={`grid min-h-28 items-center gap-5 py-4 pl-3 pr-37.5 max-mobile:min-h-33 max-mobile:gap-3 max-mobile:px-3 max-mobile:pb-13.5 max-mobile:pt-3.75 ${
           song.number
             ? "grid-cols-[66px_minmax(0,1fr)_auto_34px] max-mobile:grid-cols-[48px_minmax(0,1fr)]"
@@ -30,16 +33,19 @@ export function SongRow({ song }: { song: Song }) {
         </span>
         <ArrowUpRight className="text-dim max-mobile:hidden" size={20} aria-hidden="true" />
       </Link>
-      <Link
-        href={`/display/${song.slug}`}
-        aria-label={`Tampilkan ${song.title} sebagai slide`}
-        className={`absolute right-3 top-1/2 inline-flex h-10 -translate-y-1/2 items-center gap-2 rounded-md border border-line px-3.25 text-[13px] font-bold text-ink transition-colors hover:border-brand hover:text-brand max-mobile:bottom-2.75 max-mobile:right-auto max-mobile:top-auto max-mobile:h-8.5 max-mobile:translate-y-0 ${
+      <div
+        className={`absolute right-3 top-1/2 -translate-y-1/2 max-mobile:bottom-2.75 max-mobile:right-auto max-mobile:top-auto max-mobile:translate-y-0 ${
           song.number ? "max-mobile:left-18" : "max-mobile:left-3"
         }`}
       >
-        <Presentation size={18} />
-        <span>Display</span>
-      </Link>
+        <SlideMenu
+          slug={song.slug}
+          hasChords={Boolean(song.chords)}
+          context={context}
+          label="Display"
+          className="inline-flex h-10 items-center gap-2 rounded-md border border-line px-3.25 text-[13px] font-bold text-ink transition-colors hover:border-brand hover:text-brand max-mobile:h-8.5"
+        />
+      </div>
     </article>
   );
 }

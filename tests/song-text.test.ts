@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { joinReff, lyricsToDisplaySlides, lyricsToSlides, slugifySong, splitReff } from "../src/lib/song-text.ts";
+import { joinReff, lyricsToDisplaySlides, lyricsToSlides, lyricsToVerses, normalizeReffMarkers, slugifySong, splitReff } from "../src/lib/song-text.ts";
+
+test("normalisasi Ref mempertahankan isi dan keterangan tanpa menghitung reff sebagai bait", () => {
+  for (const marker of ["Ref:", "Ref.", "Ref :", "Reff.", "Reff:"]) {
+    const text = normalizeReffMarkers(`bait satu\n\n${marker}\nreff lagu\n\nbait dua`);
+    assert.equal(text, "bait satu\n\nReff:\nreff lagu\n\nbait dua");
+    assert.deepEqual(lyricsToVerses(text).map(({ reff, bait }) => ({ reff, bait })), [
+      { reff: false, bait: 1 }, { reff: true, bait: 0 }, { reff: false, bait: 2 },
+    ]);
+    assert.equal(normalizeReffMarkers(text), text);
+  }
+  for (const marker of ["Ref: 1-4", "Ref: 5", "Ref ayat 4:"]) {
+    const text = normalizeReffMarkers(`${marker}\nisi reff`);
+    assert.equal(lyricsToVerses(text)[0].reff, true);
+    assert.ok(text.includes(`(ayat ${marker.match(/\d+(?:-\d+)?/)![0]})\nisi reff`));
+  }
+  assert.equal(normalizeReffMarkers("bait satu\n\nbait dua"), "bait satu\n\nbait dua");
+});
 
 test("memisahkan satu bait menjadi satu slide", () => {
   assert.deepEqual(lyricsToSlides("baris 1\nbaris 2\n\nbaris 3"), [
