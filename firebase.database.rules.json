@@ -15,6 +15,7 @@
           "mode": { ".validate": "newData.val() === 'lyrics' || newData.val() === 'chord'" },
           "index": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000 && newData.val() % 1 === 0" },
           "blank": { ".validate": "newData.isBoolean()" },
+          "blackout": { ".validate": "newData.isBoolean()" },
           "dark": { ".validate": "newData.isBoolean()" },
           "active": { ".validate": "newData.isBoolean()" },
           "updatedAt": { ".validate": "newData.isNumber() && newData.val() > 0" },

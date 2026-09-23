@@ -50,9 +50,12 @@ export function AudienceScreen() {
         }, () => setError("Sesi online tidak bisa dibuka. Minta link baru dari presenter."));
       }).catch(() => { if (!disposed) setError("Koneksi online gagal. Periksa konfigurasi Firebase atau koneksi internet."); });
     }
-    const changed = () => setFullscreen(Boolean(document.fullscreenElement));
+    const fullscreenMode = window.matchMedia("(display-mode: fullscreen)");
+    const changed = () => setFullscreen(Boolean(document.fullscreenElement) || fullscreenMode.matches);
+    changed();
     document.addEventListener("fullscreenchange", changed);
-    return () => { disposed = true; clearInterval(heartbeat); bus.close(); unsubscribe(); document.removeEventListener("fullscreenchange", changed); };
+    fullscreenMode.addEventListener("change", changed);
+    return () => { disposed = true; clearInterval(heartbeat); bus.close(); unsubscribe(); document.removeEventListener("fullscreenchange", changed); fullscreenMode.removeEventListener("change", changed); };
   }, [connectionRetry]);
 
   useEffect(() => {
@@ -70,10 +73,10 @@ export function AudienceScreen() {
   const slides = song ? lyricsToDisplaySlides(state?.mode === "chord" && song.chords ? song.chords : song.lyrics) : [];
   return (
     <main className="group fixed inset-0 z-100 bg-black text-white">
-      {state?.active && song?.slug === state.slug ? <PresentationSlide title={song.title} number={song.number} slide={slides[Math.min(state.index, slides.length - 1)]} index={state.index} total={slides.length} baitCount={Math.max(0, ...slides.map((slide) => slide.bait))} chord={state.mode === "chord" && Boolean(song.chords)} dark={state.dark} blank={state.blank} /> : <div className="grid h-full place-items-center text-center"><p>{state && !state.active ? "Presentasi dihentikan" : status || "Menyiapkan tayangan…"}</p></div>}
+      {state?.active && song?.slug === state.slug ? <PresentationSlide title={song.title} number={song.number} slide={slides[Math.min(state.index, slides.length - 1)]} index={state.index} total={slides.length} baitCount={Math.max(0, ...slides.map((slide) => slide.bait))} chord={state.mode === "chord" && Boolean(song.chords)} dark={state.dark} blank={state.blank} blackout={state.blackout} /> : <div className="grid h-full place-items-center text-center"><p>{state && !state.active ? "" : status || "Menyiapkan tayangan…"}</p></div>}
       {error && <div role="alert" className="absolute bottom-4 left-4 rounded-lg bg-black/85 p-3 text-sm">{error}<button className="ml-3 underline" onClick={() => { setError(""); setRetry((value) => value + 1); setConnectionRetry((value) => value + 1); }}>Coba lagi</button></div>}
       {!fullscreen && <button type="button" className="absolute right-4 top-4 rounded-lg bg-black/80 px-4 py-3 text-sm text-white" onClick={() => { void document.documentElement.requestFullscreen().catch(() => setError("Layar penuh tidak tersedia. Gunakan tombol layar penuh pada browser.")); }}>Layar penuh</button>}
-      {fullscreen && <button type="button" className="absolute right-4 top-4 rounded-lg bg-black/80 px-4 py-3 text-sm text-white opacity-0 focus:opacity-100 group-hover:opacity-100" onClick={() => document.exitFullscreen()}>Keluar layar penuh</button>}
+      {fullscreen && document.fullscreenElement && <button type="button" className="absolute right-4 top-4 rounded-lg bg-black/80 px-4 py-3 text-sm text-white opacity-0 focus:opacity-100 group-hover:opacity-100" onClick={() => document.exitFullscreen()}>Keluar layar penuh</button>}
     </main>
   );
 }

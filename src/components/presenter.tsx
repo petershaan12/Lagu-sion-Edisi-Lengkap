@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MonitorUp, Radio, Square, EyeOff, Moon, Sun, Minus, Plus } from "lucide-react";
-import { get, onDisconnect, onValue, ref, remove, set, type DatabaseReference } from "firebase/database";
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MonitorUp, Radio, Square, EyeOff, Moon, Sun, Minus, Plus, Eraser, Copy } from "lucide-react";
+import { onDisconnect, onValue, ref, remove, set, type DatabaseReference } from "firebase/database";
 import { SongSearch } from "@/components/song-search";
 import { SaveButton, usePlaylists } from "@/components/save-button";
 import { PresentationSlide } from "@/components/presentation-slide";
 import { connectFirebase, firebaseConfigured } from "@/lib/firebase";
 import { lyricsToDisplaySlides } from "@/lib/song-text";
-import { moveSlide, placeAudienceWindow, type PresentationState, type ScreenDetails } from "@/lib/presentation";
+import { moveSlide, type PresentationState, type ScreenDetails } from "@/lib/presentation";
 import type { CollectionInfo, Song } from "@/types";
 
 const BUTTON = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-brand disabled:opacity-40";
@@ -23,22 +23,19 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
   const lists = usePlaylists();
   const [listId, setListId] = useState(initialListId || "");
   const { resolvedTheme } = useTheme();
-  const [state, setState] = useState<PresentationState>({ slug: initialSong.slug, mode: initialMode, index: 0, blank: false, dark: false, active: true, updatedAt: 1 });
+  const [state, setState] = useState<PresentationState>({ slug: initialSong.slug, mode: initialMode, index: 0, blank: false, blackout: false, dark: false, active: true, updatedAt: 1 });
   const latest = useRef(state);
   const [room, setRoom] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
-  const [cloudConnected, setCloudConnected] = useState(false);
-  const [viewerReady, setViewerReady] = useState(false);
   const [previewScale, setPreviewScale] = useState(1);
   const [catalogAdjacent, setCatalogAdjacent] = useState<{ previous: string | null; next: string | null }>({ previous: null, next: null });
   const channel = useRef<BroadcastChannel | null>(null);
   const cloud = useRef<DatabaseReference | null>(null);
   const selection = useRef<AbortController | null>(null);
-  const screenDetails = useRef<ScreenDetails | null>(null);
-  const screenPermissionAttempted = useRef(false);
+  const audienceWindow = useRef<Window | null>(null);
   const playlistSongs = useMemo(() => lists.find((list) => list.id === listId)?.songs ?? [], [lists, listId]);
   const playlistPosition = playlistSongs.findIndex((item) => item.slug === prepared.slug);
   const slides = useMemo(() => lyricsToDisplaySlides(state.mode === "chord" ? liveSong.chords : liveSong.lyrics), [liveSong, state.mode]);
@@ -69,17 +66,13 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
     if (!room) return;
     const bus = new BroadcastChannel(`lagusion:${room}`);
     channel.current = bus;
-    let lastSeen = 0;
     bus.onmessage = (event) => {
       if (event.data?.type === "ready") {
-        lastSeen = Date.now();
-        setViewerReady(true);
         bus.postMessage({ type: "state", state: latest.current });
       }
     };
     const heartbeat = setInterval(() => {
       bus.postMessage({ type: "state", state: latest.current });
-      setViewerReady(Date.now() - lastSeen < 6000);
     }, 2000);
     const end = () => bus.postMessage({ type: "state", state: { ...latest.current, active: false, updatedAt: Math.max(Date.now(), latest.current.updatedAt + 1) } });
     window.addEventListener("pagehide", end);
@@ -91,14 +84,14 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
     if (!firebaseConfigured) return;
     let disposed = false;
     let roomRef: DatabaseReference | undefined;
-    let unsubscribe = () => {};
     void (async () => {
       try {
         const { db, uid } = await connectFirebase();
         if (disposed) return;
         roomRef = ref(db, `presentations/${room}`);
-        unsubscribe = onValue(ref(db, ".info/connected"), (snapshot) => setCloudConnected(snapshot.val() === true));
-        const offset = Number((await get(ref(db, ".info/serverTimeOffset"))).val()) || 0;
+        const offset = await new Promise<number>((resolve, reject) => {
+          onValue(ref(db, ".info/serverTimeOffset"), (snapshot) => resolve(Number(snapshot.val()) || 0), reject, { onlyOnce: true });
+        });
         await set(roomRef, { owner: uid, expiresAt: Date.now() + offset + 12 * 60 * 60 * 1000 - 10000, state: latest.current });
         if (disposed) { await remove(roomRef); return; }
         cloud.current = ref(db, `presentations/${room}/state`);
@@ -113,12 +106,12 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
           : code === "auth/unauthorized-domain"
             ? "Tambahkan domain production ke Authorized domains Firebase Authentication."
             : code.toLowerCase().includes("permission_denied") || code.toLowerCase().includes("permission-denied")
-              ? "Periksa rules Realtime Database untuk sesi presentasi."
+              ? "Rules Realtime Database belum menerima data tayangan terbaru. Publikasikan rules yang mengizinkan field blackout."
               : cause instanceof Error ? cause.message : "Periksa koneksi dan konfigurasi Firebase.";
         setError(`Remote Firebase gagal${code ? ` (${code})` : ""}: ${detail} Layar lokal tetap bisa dipakai.`);
       }
     })();
-    return () => { disposed = true; unsubscribe(); cloud.current = null; if (roomRef) void remove(roomRef).catch(() => {}); };
+    return () => { disposed = true; cloud.current = null; if (roomRef) void remove(roomRef).catch(() => {}); };
   }, [room]);
 
   const step = useCallback(async (delta: number) => {
@@ -134,7 +127,7 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
     if (!response.ok) return;
     const song: Song = await response.json();
     setLiveSong(song);
-    change({ slug: song.slug, index: delta > 0 ? 0 : lyricsToDisplaySlides(state.mode === "chord" ? song.chords : song.lyrics).length - 1, active: true, blank: false });
+    change({ slug: song.slug, index: delta > 0 ? 0 : lyricsToDisplaySlides(state.mode === "chord" ? song.chords : song.lyrics).length - 1, active: true, blank: false, blackout: false });
   }, [state.index, state.mode, slides.length, playlistSongs, liveSong.slug, listId, catalogAdjacent, change]);
 
   const jumpSong = useCallback(async (delta: number) => {
@@ -146,7 +139,7 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
     const song: Song = await response.json();
     const nextSlides = lyricsToDisplaySlides(state.mode === "chord" ? song.chords : song.lyrics);
     setLiveSong(song);
-    change({ slug: song.slug, index: delta > 0 ? 0 : Math.max(0, nextSlides.length - 1), active: true, blank: false });
+    change({ slug: song.slug, index: delta > 0 ? 0 : Math.max(0, nextSlides.length - 1), active: true, blank: false, blackout: false });
   }, [playlistSongs, liveSong.slug, listId, catalogAdjacent, state.mode, change]);
 
   useEffect(() => {
@@ -183,24 +176,40 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
   }
 
   async function openScreen() {
+    setMessage("");
+    setError("");
     if (!firebaseConfigured) setError("Konfigurasi NEXT_PUBLIC_FIREBASE_* tidak masuk ke production build. Atur variabel sebelum build, lalu rebuild dan deploy ulang.");
     const browser = window as Window & { getScreenDetails?: () => Promise<ScreenDetails> };
-    if (browser.getScreenDetails && !screenPermissionAttempted.current) {
-      screenPermissionAttempted.current = true;
+    let details: ScreenDetails | undefined;
+    if (browser.getScreenDetails) {
       try {
-        screenDetails.current = await browser.getScreenDetails();
-        setMessage("Izin layar diberikan. Klik Mulai presentasi sekali lagi untuk membuka layar tayangan.");
+        details = await browser.getScreenDetails();
       } catch {
-        setMessage("Izin layar tidak diberikan atau tidak tersedia. Klik Mulai presentasi lagi untuk membuka tayangan dan pindahkan jendelanya secara manual.");
+        setMessage("Izin layar tidak diberikan. Geser jendela tayangan ke layar kedua secara manual.");
       }
-      return;
     }
     const id = room || crypto.randomUUID();
-    const target = window.open(`/present/screen#${new URLSearchParams({ room: id, ...(firebaseConfigured ? { cloud: "1" } : {}) })}`, `lagusion-${id}`, "popup,width=1280,height=720");
+    const screen = details?.screens.find((item) => item !== details.currentScreen) ?? details?.currentScreen;
+    const features = screen
+      ? `popup,fullscreen,left=${screen.availLeft},top=${screen.availTop},width=${screen.availWidth},height=${screen.availHeight}`
+      : "popup,width=1280,height=720";
+    const target = window.open(`/present/screen#${new URLSearchParams({ room: id, ...(firebaseConfigured ? { cloud: "1" } : {}) })}`, "_blank", features);
     if (!target) { setError("Popup diblokir. Izinkan popup untuk membuka layar tayangan."); return; }
+    audienceWindow.current?.close();
+    audienceWindow.current = target;
     if (!room) setRoom(id);
     change({ active: true });
-    setMessage(placeAudienceWindow(target, screenDetails.current || undefined));
+    if (!details && !browser.getScreenDetails) setMessage("Geser jendela tayangan ke layar kedua secara manual, lalu klik Layar penuh.");
+  }
+
+  function stopPresentation() {
+    change({ active: true, blank: false, blackout: false });
+    audienceWindow.current?.close();
+    audienceWindow.current = null;
+    setRoom("");
+    setCloudReady(false);
+    setMessage("");
+    setError("");
   }
 
   async function copyLink() {
@@ -216,23 +225,23 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
         <div className="flex items-center gap-3"><Link href={`/lagu/${initialSong.slug}`} className="inline-flex size-10 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-ink" title="Kembali ke lagu" aria-label="Kembali ke lagu"><ArrowLeft size={20} /></Link><h1 className="m-0 font-heading text-3xl font-bold">Presenter</h1></div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={`${BUTTON} !bg-brand !text-white`} onClick={openScreen}><MonitorUp size={19} />{room ? "Buka layar tayangan" : "Mulai presentasi"}</button>
-          {cloudReady && <button type="button" className={BUTTON} onClick={copyLink}>Salin link layar</button>}
-          {room && <button type="button" className={BUTTON} onClick={() => { change({ active: false }); setMessage("Presentasi dihentikan. Layar tayangan menunggu sesi berikutnya."); }}><Square size={16} /> Hentikan</button>}
+          {cloudReady && <button type="button" className={BUTTON} onClick={copyLink} aria-label="Salin link layar" title="Salin link layar"><Copy size={18} /></button>}
+          {room && <button type="button" className={BUTTON} onClick={stopPresentation} aria-label="Hentikan presentasi" title="Hentikan presentasi"><Square size={16} /></button>}
         </div>
       </header>
-      {room && <p role="status" className="mb-4 text-sm text-muted">{viewerReady ? "Layar tayangan terhubung" : "Menunggu layar tayangan"}{firebaseConfigured ? cloudReady && cloudConnected ? " · Online" : " · Menyiapkan koneksi" : " · Dua layar lokal"}</p>}
       {message && <p role="status" className="mb-4 rounded-lg border border-line p-3 text-sm">{message}</p>}
       {error && <p role="alert" className="mb-4 text-coral">{error}</p>}
       <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 font-bold"><Radio size={18} className="text-brand" />{room && state.active ? "Sedang tayang" : "Tayangan"}</h2><span className="text-sm text-muted">{state.mode === "chord" ? "Chord" : "Lirik"} · {state.index + 1}/{slides.length}</span></div>
-          <div className="aspect-video overflow-hidden rounded-xl border border-line"><PresentationSlide title={liveSong.title} number={liveSong.number} slide={slides[state.index]} index={state.index} total={slides.length} baitCount={Math.max(0, ...slides.map((slide) => slide.bait))} chord={state.mode === "chord"} dark={state.dark} blank={state.blank || !state.active} preview scale={previewScale} /></div>
+          <div className="aspect-video overflow-hidden rounded-xl border border-line"><PresentationSlide title={liveSong.title} number={liveSong.number} slide={slides[state.index]} index={state.index} total={slides.length} baitCount={Math.max(0, ...slides.map((slide) => slide.bait))} chord={state.mode === "chord"} dark={state.dark} blank={state.blank || !state.active} blackout={state.blackout} preview scale={previewScale} /></div>
           <div className="my-4 flex flex-wrap items-center gap-2">
             <button type="button" className={BUTTON} aria-label="Slide sebelumnya" disabled={state.index === 0 && !(listId ? playlistSongs[playlistPosition - 1] : catalogAdjacent.previous)} onClick={() => void step(-1)}><ChevronLeft /></button>
             <button type="button" className={BUTTON} aria-label="Slide berikutnya" disabled={state.index >= slides.length - 1 && !(listId ? playlistSongs[playlistPosition + 1] : catalogAdjacent.next)} onClick={() => void step(1)}><ChevronRight /></button>
             <button type="button" className={BUTTON} aria-label="Lagu sebelumnya" title="Lagu sebelumnya" disabled={!((listId ? playlistSongs[playlistPosition - 1] : catalogAdjacent.previous))} onClick={() => void jumpSong(-1)}><ChevronsLeft /></button>
             <button type="button" className={BUTTON} aria-label="Lagu berikutnya" title="Lagu berikutnya" disabled={!((listId ? playlistSongs[playlistPosition + 1] : catalogAdjacent.next))} onClick={() => void jumpSong(1)}><ChevronsRight /></button>
-            <button type="button" className={BUTTON} aria-pressed={state.blank} onClick={() => change({ blank: !state.blank })}><EyeOff size={18} />{state.blank ? "Tampilkan lagi" : "Gelapkan layar"}</button>
+            <button type="button" className={BUTTON} aria-pressed={state.blank} onClick={() => change({ blank: !state.blank, blackout: false })} aria-label={state.blank ? "Tampilkan isi layar" : "Bersihkan isi layar"} title={state.blank ? "Tampilkan isi layar" : "Bersihkan isi layar"}><Eraser size={18} /></button>
+            <button type="button" className={BUTTON} aria-pressed={state.blackout} onClick={() => change({ blackout: !state.blackout, blank: false })} aria-label={state.blackout ? "Tampilkan layar" : "Gelapkan layar"} title={state.blackout ? "Tampilkan layar" : "Gelapkan layar"}><EyeOff size={18} /></button>
             <button type="button" className={BUTTON} onClick={() => change({ dark: !state.dark })} aria-label={state.dark ? "Gunakan latar terang" : "Gunakan latar gelap"} title={state.dark ? "Latar terang" : "Latar gelap"}>{state.dark ? <Sun size={18} /> : <Moon size={18} />}</button>
             <button type="button" className={BUTTON} onClick={() => setPreviewScale((value) => Math.max(0.75, value - 0.1))} aria-label="Perkecil teks preview" title="Perkecil teks preview"><Minus size={18} /></button>
             <button type="button" className={BUTTON} onClick={() => setPreviewScale((value) => Math.min(1.25, value + 0.1))} aria-label="Perbesar teks preview" title="Perbesar teks preview"><Plus size={18} /></button>
@@ -254,7 +263,7 @@ export function Presenter({ initialSong, initialMode, initialListId, collections
           </div>
           {!prepared.chords && <p className="mb-3 text-xs text-muted">Chord belum tersedia untuk lagu ini.</p>}
           <div className="mb-4 max-h-64 overflow-auto rounded-lg bg-ground p-3"><p className={`whitespace-pre-wrap text-sm ${preparedMode === "chord" ? "font-mono" : ""}`}>{preparedSlides[0]?.text}</p></div>
-          <button type="button" disabled={loading || !preparedSlides.length} className={`${BUTTON} w-full !bg-brand !text-white`} onClick={() => { setLiveSong(prepared); change({ slug: prepared.slug, mode: preparedMode, index: 0, blank: false, active: true }); }}>{loading ? "Memuat…" : "Tayangkan lagu ini"}</button>
+          <button type="button" disabled={loading || !preparedSlides.length} className={`${BUTTON} w-full !bg-brand !text-white`} onClick={() => { setLiveSong(prepared); change({ slug: prepared.slug, mode: preparedMode, index: 0, blank: false, blackout: false, active: true }); }}>{loading ? "Memuat…" : "Tayangkan lagu ini"}</button>
         </aside>
       </div>
     </main>
